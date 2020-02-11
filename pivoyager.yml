@@ -2,4 +2,3 @@ pivoyager:
   enabled: false
   path: /usr/local/bin/pivoyager
   refresh_time: 3
-  halt_voltage: 3.3

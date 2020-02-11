@@ -56,7 +56,6 @@ class PiVoyager(plugins.Plugin):
         # Initialise options
         self.path = self.options['path'] if 'path' in self.options else '/usr/local/bin/pivoyager'
         self.refresh_time = self.options['refresh_time'] if 'refresh_time' in self.options else 3
-        self.halt_voltage = self.options['halt_voltage'] if 'halt_voltage' in self.options else 3.3
 
         self.status_thread = Thread(target=self.check_status, name="StatusThread")
         self.status_thread.start()
