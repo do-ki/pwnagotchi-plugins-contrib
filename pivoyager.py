@@ -81,7 +81,7 @@ class PiVoyager(plugins.Plugin):
 
 
     def on_internet_available(self, agent):
-        if(not "inits" in self.get_status["stat"]):
+        if(not "inits" in self.get_status()["stat"]):
             # Update RTC if local time is ntp-synced and RTC is not initialised
             run([self.path, "date", "sync"])
             logging.info("updated pivoyager rtc")
