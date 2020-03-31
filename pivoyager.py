@@ -5,7 +5,7 @@
 # Tutorial for installing the binary
 # https://www.omzlo.com/articles/pivoyager-installation-and-tutorial
 from threading import Thread
-from subprocess import run, PIPE
+from subprocess import run, PIPE, DEVNULL
 from time import sleep
 
 from pwnagotchi.ui.components import LabeledValue
@@ -14,6 +14,7 @@ import pwnagotchi.ui.fonts as fonts
 import pwnagotchi.plugins as plugins
 import pwnagotchi
 import logging
+
 
 class PiVoyager(plugins.Plugin):
     __author__ = 'ZTube'
@@ -36,12 +37,9 @@ class PiVoyager(plugins.Plugin):
 
     # Thread for shutting down on low battery voltage or a button press
     def check_status(self):
-        # Cut off power after 60 seconds of inactivity
-        run([self.path, "watchdog", "60"])
         while True:
             status = self.get_status()
-            # Details at https://www.microchip.com/wwwproducts/en/en536670
-            if(not "pg" in status["stat"] and not "stat1" in status["stat"] and "stat2" in status["stat"]):
+            if(not "pg" in status["stat"]  and "low battery" in status["bat"]):
                 logging.warn("Battery low! Shutting down")
                 break
             elif("button" in status["stat"]):
@@ -49,6 +47,7 @@ class PiVoyager(plugins.Plugin):
                 run([self.path, "clear", "button"])
                 break
             sleep(self.refresh_time)
+        run([self.path, "watchdog", "60"])
         pwnagotchi.shutdown()
 
 
@@ -60,30 +59,37 @@ class PiVoyager(plugins.Plugin):
         self.status_thread = Thread(target=self.check_status, name="StatusThread")
         self.status_thread.start()
 
-        # Sync internal clock to RTC
-        # TODO: find reason for uptime mismatch in manual mode
         status = self.get_status()
         if("inits" in status["stat"]):
-            run(self.path + " date | sed 's/T/ /g;s/Z//g' | xargs -I % date -s '%'", shell=True)
-            logging.info("updated local time")
+            date = run([self.path, "date"], stdout=PIPE).stdout.decode()
+            run(["date", "-s", date], stdout=DEVNULL)
+            logging.info("pivoyager - updated local time from RTC")
         else:
-            logging.warning("could not sync local time due to uninitialised RTC")
+            logging.warning("RTC not set could not sync local time")
 
+        # enable power wakeup, enable alarm
+        run([self.path, "enable", "power-wakeup"], stdout=DEVNULL)
+        logging.info("pivoyager - enable power-wakeup")
+        run([self.path, "alarm", "*-21-00-00"], stdout=DEVNULL)
+        logging.info("pivoyager - enable alarm wakeup")
         logging.info("pivoyager ups plugin loaded.")
 
 
     def on_ui_setup(self, ui):
-        ui.add_element('pivoyager', LabeledValue(color=BLACK, label='BV', value='', position=(ui.width() / 2 + 12, 0),
-                                           label_font=fonts.Bold, text_font=fonts.Medium))
-
+        ui.add_element('pivoyager', LabeledValue(color=BLACK, label=' ', value=' ', position=(192,84),
+                                           label_font=fonts.Small, text_font=fonts.Small))
 
     def on_ui_update(self, ui):
         status = self.get_status()
-        ui.set('pivoyager', "{}".format(status["vbat"]))
-
+        charge_mapping = {
+                "charging":    "\u25AA",
+                "discharging": "\u25AB"
+                }
+        ui.set('pivoyager', "{sbat} ups\n{voltage}".format(sbat=charge_mapping[status["bat"]], voltage=status["vbat"]))
 
     def on_internet_available(self, agent):
         if(not "inits" in self.get_status()["stat"]):
             # Update RTC if local time is ntp-synced and RTC is not initialised
             run([self.path, "date", "sync"])
-            logging.info("updated pivoyager rtc")
+            logging.info("pivoyager - update RTC from NTP")
+			
